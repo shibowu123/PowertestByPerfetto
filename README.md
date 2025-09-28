@@ -1,0 +1,2 @@
+# PowertestByPerfetto
+用于采集perfetto Powerrails数据点的脚本
