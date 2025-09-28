@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>客户端功耗测试报告</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        h2 { font-weight: bold; }
+        table { border-collapse: collapse; width: 80%; margin-bottom: 40px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+        th { background: #f5f5f5; }
+        .chart-container { width: 80%; margin-bottom: 40px; }
+    </style>
+</head>
+<body>
+    <h2>客户端功耗测试</h2>
+    <h3>Battery Counters</h3>
+    <table>
+        <tr><th>Name</th><th>Delta value</th><th>Rate /s</th><th>Weighted avg value</th><th>Count</th><th>First value</th><th>Last value</th><th>Min value</th><th>Max value</th></tr>
+        __BATTERY_ROWS__
+    </table>
+    <h3>Power Rails</h3>
+    <table>
+        <tr><th>标签</th><th>测试时长</th><th>功耗均值 (mW)</th><th>总能量 (mJ)</th></tr>
+        __POWER_RAILS_ROWS__
+    </table>
+    <h3>Hardware-Clock Frequency</h3>
+    <table>
+        <tr><th>标签</th><th>频率均值</th><th>最大频率</th><th>最小频率</th></tr>
+        __FREQUENCY_ROWS__
+    </table>
+    <div class="chart-container">
+        <div id="charts"></div>
+    </div>
+    <script>
+        const seriesList = __SERIES_LIST__;
+        const container = document.getElementById('charts');
+        const sampleEvery = 10; // 采样间隔：每 N 个点显示一个实心点
+        seriesList.forEach((series, idx) => {
+            const wrapper = document.createElement('div');
+            wrapper.style.marginBottom = '32px';
+            wrapper.style.position = 'relative';
+            const title = document.createElement('h4');
+            title.textContent = series.label;
+            const canvas = document.createElement('canvas');
+            canvas.id = `pr_chart_${idx}`;
+            wrapper.appendChild(title);
+            wrapper.appendChild(canvas);
+            // 浮动框
+            const floatBox = document.createElement('div');
+            floatBox.style.cssText = 'position:absolute; display:none; background:rgba(255,255,255,0.95); border:1px solid #ccc; border-radius:4px; padding:4px 8px; font-size:12px; pointer-events:none; color:#333;';
+            wrapper.appendChild(floatBox);
+            container.appendChild(wrapper);
+            const ctx = canvas.getContext('2d');
+            // 自定义插件：十字准线 + 当前值浮动框
+            const makeCrosshairPlugin = (points, box) => ({
+                id: 'crosshairBox',
+                afterEvent(chart, args) {
+                    const e = args.event;
+                    if (!e) return;
+                    const {left, right, top, bottom} = chart.chartArea;
+                    if (e.x < left || e.x > right || e.y < top || e.y > bottom) {
+                        box.style.display = 'none';
+                        chart.$crosshair = null;
+                        return;
+                    }
+                    const xScale = chart.scales.x;
+                    const yScale = chart.scales.y;
+                    const xVal = xScale.getValueForPixel(e.x);
+                    // 找到与鼠标 x 最接近的数据点
+                    let nearest = null; let minDx = Infinity;
+                    for (let i = 0; i < points.length; i++) {
+                        const dx = Math.abs(points[i].x - xVal);
+                        if (dx < minDx) { minDx = dx; nearest = points[i]; }
+                    }
+                    if (!nearest) return;
+                    const px = xScale.getPixelForValue(nearest.x);
+                    const py = yScale.getPixelForValue(nearest.y);
+                    chart.$crosshair = { x: px, y: py };
+                    box.style.left = (px + 12) + 'px';
+                    box.style.top = (py + 12) + 'px';
+                    box.innerHTML = `时间: ${nearest.x.toFixed(3)}s<br/>功率: ${nearest.y.toFixed(3)} mW`;
+                    box.style.display = 'block';
+                    chart.draw();
+                },
+                afterDatasetsDraw(chart, args, opts) {
+                    const ch = chart.$crosshair;
+                    if (!ch) return;
+                    const {ctx, chartArea: {left, right, top, bottom}} = chart;
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+                    ctx.lineWidth = 1;
+                    // 垂直线
+                    ctx.beginPath();
+                    ctx.moveTo(ch.x, top);
+                    ctx.lineTo(ch.x, bottom);
+                    // 水平线
+                    ctx.moveTo(left, ch.y);
+                    ctx.lineTo(right, ch.y);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            });
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: series.label,
+                        data: series.points,
+                        borderColor: '#3e95cd',
+                        fill: false,
+                        pointStyle: 'circle',
+                        // 采样点：每 N 个点显示，其他点不画点，仅画线
+                        pointRadius: (ctx) => (ctx.dataIndex % sampleEvery === 0 ? 3 : 0),
+                        pointHoverRadius: (ctx) => (ctx.dataIndex % sampleEvery === 0 ? 5 : 0),
+                        pointHitRadius: (ctx) => (ctx.dataIndex % sampleEvery === 0 ? 15 : 0)
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'top' } },
+                    parsing: true,
+                    interaction: { mode: 'nearest', intersect: false },
+                    scales: {
+                        x: { type: 'linear', title: { display: true, text: '时间 (s)' } },
+                        y: { title: { display: true, text: '功率 (mW)' } }
+                    }
+                },
+                plugins: [ makeCrosshairPlugin(series.points, floatBox) ]
+            });
+        });
+    </script>
+</body>
+</html>

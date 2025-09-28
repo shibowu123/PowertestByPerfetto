@@ -1,0 +1,58 @@
+buffers {
+  size_kb: 262144
+  fill_policy: DISCARD
+}
+buffers {
+  size_kb: 8192
+  fill_policy: DISCARD
+}
+data_sources {
+  config {
+    name: "android.power"
+    android_power_config {
+      battery_poll_ms: 1000
+      battery_counters: BATTERY_COUNTER_CAPACITY_PERCENT
+      battery_counters: BATTERY_COUNTER_CHARGE
+      battery_counters: BATTERY_COUNTER_CURRENT
+      collect_power_rails: true
+    }
+  }
+}
+data_sources {
+  config {
+    name: "linux.ftrace"
+    ftrace_config {
+      ftrace_events: "regulator/regulator_set_voltage"
+      ftrace_events: "regulator/regulator_set_voltage_complete"
+      ftrace_events: "power/clock_enable"
+      ftrace_events: "power/clock_disable"
+      ftrace_events: "power/clock_set_rate"
+      ftrace_events: "power/suspend_resume"
+      ftrace_events: "sched/sched_process_exit"
+      ftrace_events: "sched/sched_process_free"
+      ftrace_events: "task/task_newtask"
+      ftrace_events: "task/task_rename"
+    }
+  }
+}
+data_sources {
+  config {
+    name: "android.heapprofd"
+    heapprofd_config {
+      sampling_interval_bytes: 4096
+      shmem_size_bytes: 8388608
+      block_client: true
+      all_heaps: false
+    }
+  }
+}
+data_sources {
+  config {
+    name: "linux.process_stats"
+    target_buffer: 1
+    process_stats_config {
+      scan_all_processes_on_start: true
+    }
+  }
+}
+duration_ms: 3600000
